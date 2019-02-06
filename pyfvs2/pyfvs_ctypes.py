@@ -2,7 +2,9 @@
 Python FVS wrappers using ctypes.
 """
 
+import random
 import ctypes as ct
+from ctypes.util import find_library
 
 import numpy as np
 import pandas as pd
@@ -12,17 +14,21 @@ from commons_ctypes import *
 pd.options.display.float_format = '{:.3f}'.format
 
 class FVSLib(object):
-    def __init__(self, variant):
-        self.libname = 'libFVS_{}'.format(variant.lower())
+    def __init__(self, variant, keywordfile=None):
+        #self.libname = 'libFVS_{}'.format(variant.lower())
+        self.variant = variant.upper()
+        self.libname = 'libFVS_{}'.format(self.variant.lower())
+        # self.libpath = find_library(self.libname)
         self.fvslib = ct.CDLL(self.libname)
 
-        self.kwdfile = None
+        self.kwdfile = keywordfile
 
+        self.seed = 55329
         self._spp_codes = None
         self._init_commons()
         
     def _init_commons(self):    
-        # Register the common data
+        # Register the common block data
         self.glblcntl = FVS_GLBLCNTL.in_dll(self.fvslib, 'glblcntl_')
         self.glblcntlc = FVS_GLBLCNTLC.in_dll(self.fvslib, 'glblcntlc_')
         self.arrays = FVS_ARRAYS.in_dll(self.fvslib, 'arrays_')
@@ -32,6 +38,39 @@ class FVSLib(object):
         self.outchr = FVS_OUTCHR.in_dll(self.fvslib, 'outchr_')
         self.outcom  = FVS_OUTCOM.in_dll(self.fvslib, 'outcom_')
         self.workcm  = FVS_WORKCM.in_dll(self.fvslib, 'workcm_')
+        self.varchr  = FVS_VARCHR.in_dll(self.fvslib, 'varchr_')
+        self.varcom  = FVS_VARCOM.in_dll(self.fvslib, 'varcom_')
+
+        # expose FVS data as numpy arrays
+        self.iy = np.ctypeslib.as_array(self.contrl.iy)
+
+        self.ind = np.ctypeslib.as_array(self.arrays.ind)
+        self.idtree = np.ctypeslib.as_array(self.arrays.idtree)
+        self.isp = np.ctypeslib.as_array(self.arrays.isp)
+        self.prob = np.ctypeslib.as_array(self.arrays.prob)
+        self.wk2 = np.ctypeslib.as_array(self.arrays.wk2)
+        self.dbh = np.ctypeslib.as_array(self.arrays.dbh)
+        self.dg = np.ctypeslib.as_array(self.arrays.dg)
+        self.ht = np.ctypeslib.as_array(self.arrays.ht)
+        self.htg = np.ctypeslib.as_array(self.arrays.htg)
+        self.icr = np.ctypeslib.as_array(self.arrays.icr)
+        self.crwdth = np.ctypeslib.as_array(self.arrays.crwdth)
+        self.pct = np.ctypeslib.as_array(self.arrays.pct)
+        self.cfv = np.ctypeslib.as_array(self.arrays.cfv)
+        self.wk1 = np.ctypeslib.as_array(self.arrays.wk1)
+        self.wk3 = np.ctypeslib.as_array(self.arrays.wk3)
+        self.bfv = np.ctypeslib.as_array(self.arrays.bfv)
+
+        self.ptbalt = np.ctypeslib.as_array(self.varcom.ptbalt)
+
+    def set_seed(self, seed=None):
+        if seed is None:
+            seed = random.randrange(1, 9e4, 2)
+        
+        self.seed = seed
+        _seed = ct.byref(ct.c_long(self.seed))
+        t = ct.byref(ct.c_long(1))
+        self.fvslib.ransed_(t,_seed)
 
     def set_cmdline(self, kwdfile=None):
         """Set the FVS command line internal variable."""
@@ -43,9 +82,9 @@ class FVSLib(object):
 
         self.fvslib.fvssetcmdline_.argtypes = [ct.c_char_p, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.c_int]
         cmdline = '--keywordfile={} '.format(self.kwdfile)
-        lencl = ct.c_int(len(cmdline))
+        lencl = ct.byref(ct.c_int(len(cmdline)))
         rtn_code = ct.c_int(0)
-        self.fvslib.fvssetcmdline_(cmdline.encode(),ct.byref(lencl),ct.byref(rtn_code),len(cmdline))
+        self.fvslib.fvssetcmdline_(cmdline.encode(),lencl,ct.byref(rtn_code),len(cmdline))
         
         if not rtn_code.value==0:
             raise IOError('Failed to set the FVS command line variable: {}'.format(cmdline))
@@ -54,8 +93,6 @@ class FVSLib(object):
         """Run FVS for keyword file."""
 
         self.set_cmdline(kwdfile)
-
-        self.fvslib.fvs_.argtypes = [ct.POINTER(ct.c_int),]
         rtn_code = ct.c_int(0)
         self.fvslib.fvs_(ct.byref(rtn_code))
 
@@ -66,17 +103,29 @@ class FVSLib(object):
     def num_cycles(self):
         """Return the number of cycles in the current run."""
         return self.contrl.ncyc
+    
+    @num_cycles.setter
+    def num_cycles(self, cycles):
+        self.contrl.ncyc = cycles
         
     @property
     def cycle(self):
         """Return the current cycle number."""
         return self.contrl.icyc
-        
+
+    @cycle.setter
+    def cycle(self, cycle):
+        self.contrl.icyc = cycle
+
     @property
     def num_trees(self):
         """Return the current number of tree records."""
         return self.contrl.itrn
-        
+
+    @num_trees.setter
+    def num_trees(self, ntrees):
+        self.contrl.itrn = ntrees
+
     @property
     def fvs_spp(self):
         """Return a list of numeric FVS species codes."""
@@ -107,42 +156,36 @@ class FVSLib(object):
         return self._spp_codes
     
     @property
-    def dbh(self):
-        """Return a Pandas Series representing the DBH of the current treelist."""
-        return pd.Series(self.arrays.dbh[0:self.contrl.itrn])
-
-    @property
-    def spp(self):
-        """Return a Pandas Series representing the species codes of the current treelist."""
-        return pd.Series(self.arrays.isp[0:self.contrl.itrn])
-    
-    @property
     def tpa(self):
-        return pd.Series(self.arrays.prob[0:self.contrl.itrn])/self.plot.grospc
+        return pd.Series(self.prob[0:self.num_trees]/self.plot.grospc)
     
+    @property
+    def mort(self):
+        return pd.Series(self.wk2[0:self.num_trees]/self.plot.grospc)
+
     @property
     def trees(self):
         """Return a Pandas DataFrame representing the current treelist."""
         df = pd.DataFrame(dict((
-            ('treeid', self.arrays.idtree[0:self.contrl.itrn]),
-            ('spp', self.arrays.isp[0:self.contrl.itrn]),
-            ('tpa', self.arrays.prob[0:self.contrl.itrn]),
-            ('mort', self.arrays.wk2[0:self.contrl.itrn]),
-            ('dbh', self.arrays.dbh[0:self.contrl.itrn]),
-            ('dg', self.arrays.dg[0:self.contrl.itrn]),
-            ('ht', self.arrays.ht[0:self.contrl.itrn]),
-            ('htg', self.arrays.htg[0:self.contrl.itrn]),
-            ('cr', self.arrays.icr[0:self.contrl.itrn]),
-            ('cw', self.arrays.crwdth[0:self.contrl.itrn]),
-            ('bapctl', self.arrays.pct[0:self.contrl.itrn]),
-            # ('batlg', self.varcom.ptbalt[0:self.contrl.itrn]),
-            ('tcfv', self.arrays.cfv[0:self.contrl.itrn]),
-            ('mcfv', self.arrays.wk1[0:self.contrl.itrn]),
-            ('mbfv', self.arrays.bfv[0:self.contrl.itrn]),
+            ('treeid', self.idtree[0:self.num_trees]),
+            ('spp', self.isp[0:self.num_trees]),
+            ('tpa', self.tpa),
+            ('mort', self.mort),
+            ('dbh', self.dbh[0:self.num_trees]),
+            ('dg', self.dg[0:self.num_trees]),
+            ('ht', self.ht[0:self.num_trees]),
+            ('htg', self.htg[0:self.num_trees]),
+            ('cr', self.icr[0:self.num_trees]),
+            ('cw', self.crwdth[0:self.num_trees]),
+            ('bapctl', self.pct[0:self.num_trees]),
+            ('batlg', self.ptbalt[0:self.num_trees]),
+            ('tcfv', self.cfv[0:self.num_trees]),
+            ('mcfv', self.wk1[0:self.num_trees]),
+            ('mbfv', self.bfv[0:self.num_trees]),
             )))
         
-        df['tpa'] /= self.plot.grospc
-        df['mort'] /= self.plot.grospc
+        # df['tpa'] /= self.plot.grospc
+        # df['mort'] /= self.plot.grospc
         
         return df.sort_values(['spp','treeid'])
     

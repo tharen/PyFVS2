@@ -355,3 +355,43 @@ class FVS_WORKCM(ct.Structure):
         ('work2', F_INTEGER*MAXSP),
         ('work3', F_INTEGER*MAXTRE),
     ]
+
+class FVS_VARCHR(ct.Structure):
+    _fields_ = [
+        ('pcom', F_CHAR*8),
+        ('pcomx', F_CHAR*8)
+    ]
+
+class FVS_VARCOM(ct.Structure):
+    _fields_ = [
+        ('aa', F_REAL*MAXSP),
+        ('b0accf', F_REAL*MAXSP),
+        ('b0astd', F_REAL*MAXSP),
+        ('b0bccf', F_REAL*MAXSP),
+        ('b1accf', F_REAL*MAXSP),
+        ('b1bccf', F_REAL*MAXSP),
+        ('b1bstd', F_REAL*MAXSP),
+        ('bb', F_REAL*MAXSP),
+        ('cepmrt', F_REAL),
+        ('cepmsb', F_REAL),
+        ('dhimsb', F_REAL),
+        ('dlomsb', F_REAL),
+        ('effmsb', F_REAL),
+        ('htt1', (F_REAL*MAXSP)*9),
+        ('htt2', (F_REAL*MAXSP)*9),
+        ('iabflg', F_INTEGER*MAXSP),
+        ('ibasp', F_INTEGER),
+        ('isilft', F_INTEGER),
+        ('istagf', F_INTEGER*MAXSP),
+        ('lbamax', F_LOGICAL),
+        ('lfixsd', F_LOGICAL),
+        ('lflagv', F_LOGICAL),
+        ('maxsdi', F_INTEGER*MAXSP),
+        ('mflmsb', F_INTEGER),
+        ('ptbaa', F_REAL*MAXPLT),
+        ('ptbalt', F_REAL*MAXTRE),
+        ('qmdmsb', F_REAL),
+        ('slpmrt', F_REAL),
+        ('slpmsb', F_REAL),
+        ('tpamrt', F_REAL),
+    ]
