@@ -11,14 +11,13 @@ from commons_ctypes import *
 
 pd.options.display.float_format = '{:.3f}'.format
 
-libname = 'libFVS_pn'
-kwdfile = 'c:/workspace/pyfvs2/data/pnt01.key'
-
 class FVSLib(object):
     def __init__(self, variant):
         self.libname = 'libFVS_{}'.format(variant.lower())
         self.fvslib = ct.CDLL(self.libname)
-        
+
+        self.kwdfile = None
+
         self._spp_codes = None
         self._init_commons()
         
@@ -32,18 +31,36 @@ class FVSLib(object):
         self.contrl = FVS_CONTRL.in_dll(self.fvslib, 'contrl_')
         self.outchr = FVS_OUTCHR.in_dll(self.fvslib, 'outchr_')
         self.outcom  = FVS_OUTCOM.in_dll(self.fvslib, 'outcom_')
+        self.workcm  = FVS_WORKCM.in_dll(self.fvslib, 'workcm_')
 
-    def run_kwds(self, kwdfile):
+    def set_cmdline(self, kwdfile=None):
+        """Set the FVS command line internal variable."""
+        if kwdfile is None:
+            kwdfile = self.kwdfile
+        
+        else:
+            self.kwdfile = kwdfile
+
         self.fvslib.fvssetcmdline_.argtypes = [ct.c_char_p, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.c_int]
-        self.fvslib.fvs_.argtypes = [ct.POINTER(ct.c_int),]
-
-        cmdline = '--keywordfile={} '.format(kwdfile)
+        cmdline = '--keywordfile={} '.format(self.kwdfile)
         lencl = ct.c_int(len(cmdline))
         rtn_code = ct.c_int(0)
         self.fvslib.fvssetcmdline_(cmdline.encode(),ct.byref(lencl),ct.byref(rtn_code),len(cmdline))
         
+        if not rtn_code.value==0:
+            raise IOError('Failed to set the FVS command line variable: {}'.format(cmdline))
+
+    def run_kwds(self, kwdfile=None):
+        """Run FVS for keyword file."""
+
+        self.set_cmdline(kwdfile)
+
+        self.fvslib.fvs_.argtypes = [ct.POINTER(ct.c_int),]
         rtn_code = ct.c_int(0)
         self.fvslib.fvs_(ct.byref(rtn_code))
+
+        if not rtn_code.value==0:
+            raise IOError('Error while executing FVS for keyword file: {}'.format(self.kwdfile))
     
     @property
     def num_cycles(self):
@@ -132,45 +149,53 @@ class FVSLib(object):
     @property
     def summary(self):
         """Return the summary table the current run."""
-        return np.ctypeslib.as_array(fvs.outcom.iosum)[:self.num_cycles+1]
-        
-fvs = FVSLib('pn')
-fvs.run_kwds(kwdfile)
+        return np.ctypeslib.as_array(self.outcom.iosum)[:self.num_cycles+1]
 
-# print(fvs.trees)
-print(fvs.summary)
+def test():
+    kwdfile = 'c:/workspace/pyfvs2/data/pnt01.key'
+    
+    fvs = FVSLib('pn')
+    fvs.run_kwds(kwdfile)
 
-# print(fvs.outcom.iosum[0:fvs.num_cycles][0:20])
+    # print(fvs.trees)
+    print(fvs.summary)
+    print()
+    print(fvs.contrl.iy[0:25])
 
-
-# fvs.fvssetcmdline_.argtypes = [fchar, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int)]
-
-# cmdline = '--keywordfile={} '.format(kwdfile)
-# _cmdline = fchar()
-# _cmdline.str = cmdline.encode()
-# _cmdline.len = len(cmdline)+1
-
-# lencl = ct.c_int(len(cmdline))
-# rtn_code = ct.c_int(0)
-# fvs.fvssetcmdline_(_cmdline,ct.byref(lencl),ct.byref(rtn_code))
+    # print(fvs.outcom.iosum[0:fvs.num_cycles][0:20])
 
 
-# # Set the keyword file directly
-# glblcntlc.keywordfile = kwdfile.encode()
-# fvs.filopn_()
-# glblcntl.fvsrtncode = 0
+    # fvs.fvssetcmdline_.argtypes = [fchar, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int)]
 
-# print('***', glblcntlc.keywordfile.strip())
+    # cmdline = '--keywordfile={} '.format(kwdfile)
+    # _cmdline = fchar()
+    # _cmdline.str = cmdline.encode()
+    # _cmdline.len = len(cmdline)+1
+
+    # lencl = ct.c_int(len(cmdline))
+    # rtn_code = ct.c_int(0)
+    # fvs.fvssetcmdline_(_cmdline,ct.byref(lencl),ct.byref(rtn_code))
 
 
-# print('\n')
-# print('DBH', arrays.dbh[0:5])
-# print('DG', arrays.dg[0:5])
-# print('CFV TD', arrays.ht2td[0][0:5])
-# print('BFV TD', arrays.ht2td[1][0:5])
-# print('PROB', arrays.prob[0:5])
-# print('HT', arrays.ht[0:5])
-# print('ISP', arrays.isp[0:5])
+    # # Set the keyword file directly
+    # glblcntlc.keywordfile = kwdfile.encode()
+    # fvs.filopn_()
+    # glblcntl.fvsrtncode = 0
 
-# print('FIAJSP', [''.join([v.decode() for v in s]) for s in pltchr.fiajsp])
-# print('JSP', [''.join([v.decode() for v in s]) for s in pltchr.jsp])
+    # print('***', glblcntlc.keywordfile.strip())
+
+
+    # print('\n')
+    # print('DBH', arrays.dbh[0:5])
+    # print('DG', arrays.dg[0:5])
+    # print('CFV TD', arrays.ht2td[0][0:5])
+    # print('BFV TD', arrays.ht2td[1][0:5])
+    # print('PROB', arrays.prob[0:5])
+    # print('HT', arrays.ht[0:5])
+    # print('ISP', arrays.isp[0:5])
+
+    # print('FIAJSP', [''.join([v.decode() for v in s]) for s in pltchr.fiajsp])
+    # print('JSP', [''.join([v.decode() for v in s]) for s in pltchr.jsp])
+
+if __name__=='__main__':
+    test()

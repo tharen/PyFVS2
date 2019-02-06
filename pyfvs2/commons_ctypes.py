@@ -4,6 +4,7 @@ FVS common data structures.
 
 import ctypes as ct
 
+import numpy as np
 
 MAXPLT = 500
 MAXTRE = 3000
@@ -13,7 +14,7 @@ MAXCYC = 40
 MAXCY1 = 41
 
 F_REAL = ct.c_float
-F_INTEGER = ct.c_int
+F_INTEGER = ct.c_long
 F_LOGICAL = ct.c_int
 F_CHAR = ct.c_char
 
@@ -315,6 +316,7 @@ class FVS_OUTCOM(ct.Structure):
         ('htio', F_REAL*6),
         ('ioicr', F_INTEGER*6),
         ('iosum', (F_INTEGER*20)*MAXCY1),
+        # ('c_iosum', ct.POINTER(F_INTEGER)),
         ('oacc', F_REAL*7),
         ('obfcur', F_REAL*7),
         ('obfrem', F_REAL*7),
@@ -339,4 +341,17 @@ class FVS_OUTCOM(ct.Structure):
         ('osptv', F_REAL*4),
         ('pctio', F_REAL*6),
         ('prbio', F_REAL*6),
-        ]
+    ]
+    
+    # def __init__(self,*args,**kwargs):
+    #     super(FVS_OUTCOM,self).__init__(*args,**kwargs)
+    #     self.iosum = np.zeros((20, MAXCY1), dtype="int16")
+    #     self.c_iosum = np.ctypeslib.as_ctypes(self.iosum)
+
+class FVS_WORKCM(ct.Structure):
+    _fields_ = [
+        ('iwork1', F_INTEGER*MAXTRE),
+        ('work1', F_INTEGER*MAXTRE),
+        ('work2', F_INTEGER*MAXSP),
+        ('work3', F_INTEGER*MAXTRE),
+    ]
